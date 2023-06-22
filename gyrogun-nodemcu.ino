@@ -54,9 +54,15 @@ void ICACHE_RAM_ATTR dmpDataReady() {
     mpuInterrupt = true;
 }
 
-int switch_state = 0;
+int switch_before = 0;
 int count = 0;
 int buzz_counter = 0;
+
+int sleep_counter = 0;
+bool sleep_counter_freeze = false;
+bool sleep = false;
+
+void connect_wifi();
 
 void setup() {
     // join I2C bus (I2Cdev library doesn't do this automatically)
@@ -134,17 +140,60 @@ void setup() {
     pinMode(PIN_SWITCH, INPUT_PULLUP);
     pinMode(PIN_BUZZ, OUTPUT);
 
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(MECHANET_SSID, MECHANET_PW);
-
-    while(WiFi.status() != WL_CONNECTED) {
-        delay(500);
-    }
+    connect_wifi();
 }
 
 void loop() {
     // if programming failed, don't try to do anything
-    if (!dmpReady) return;
+    if (!dmpReady) return;    
+  
+    bool switch_was_clicked = false;
+  
+    int switch_val = digitalRead(PIN_SWITCH);
+    if (switch_val == 0) {
+        if(switch_before == 1) {
+            switch_was_clicked = true;
+            buzz_counter = 5;
+        }
+            
+        if(buzz_counter > 0) {
+            digitalWrite(PIN_BUZZ, HIGH);
+            buzz_counter--;
+        } else {
+            digitalWrite(PIN_BUZZ, LOW);
+        }
+        
+        if (switch_before == 0 && !sleep_counter_freeze) {
+            sleep_counter++;
+        }
+    } else {
+        digitalWrite(PIN_BUZZ, LOW);
+        sleep_counter_freeze = false;
+    }
+    switch_before = switch_val;
+
+    if (sleep_counter > 400) {
+        sleep_counter = 0;
+        sleep_counter_freeze = true;
+        sleep = !sleep;
+
+        if (sleep) {
+            Serial.println("going into sleep....");
+            WiFi.disconnect();
+            WiFi.forceSleepBegin();
+            delay(10);
+        } else {
+            Serial.println("waking up from sleep....");
+            WiFi.forceSleepWake();
+            connect_wifi();
+        }
+    }
+
+    if (sleep) {
+        delay(7);
+        return;
+    }
+    
     // read a packet from FIFO
     if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) { // Get the Latest packet 
                 // display Euler angles in degrees
@@ -160,26 +209,6 @@ void loop() {
     }
 
     float yaw = ypr[0] * 180/M_PI, pitch = ypr[1] *180/M_PI, roll = ypr[2] * 180/M_PI;
-  
-    bool switch_was_clicked = false;
-  
-    int switch_val = digitalRead(PIN_SWITCH);
-    if (switch_val == 0) {
-        if(switch_state == 1) {
-            switch_was_clicked = true;
-            buzz_counter = 5;
-        }
-            
-        if(buzz_counter > 0) {
-            digitalWrite(PIN_BUZZ, HIGH);
-            buzz_counter--;
-        } else {
-            digitalWrite(PIN_BUZZ, LOW);
-        }
-    } else {
-        digitalWrite(PIN_BUZZ, LOW);
-    }
-    switch_state = switch_val;
 
     uint8_t packet[16] = {};
 
@@ -222,4 +251,13 @@ void loop() {
     client.write(packet, 16);
 
     delay(7);
+}
+
+void connect_wifi() {
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(MECHANET_SSID, MECHANET_PW);
+
+    while(WiFi.status() != WL_CONNECTED) {
+        delay(500);
+    }
 }
