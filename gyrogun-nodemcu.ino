@@ -58,10 +58,6 @@ int switch_before = 0;
 int count = 0;
 int buzz_counter = 0;
 
-int sleep_counter = 0;
-bool sleep_counter_freeze = false;
-bool sleep = false;
-
 void connect_wifi();
 
 void setup() {
@@ -162,37 +158,10 @@ void loop() {
         } else {
             digitalWrite(PIN_BUZZ, LOW);
         }
-        
-        if (switch_before == 0 && !sleep_counter_freeze) {
-            sleep_counter++;
-        }
     } else {
         digitalWrite(PIN_BUZZ, LOW);
-        sleep_counter_freeze = false;
     }
     switch_before = switch_val;
-
-    if (sleep_counter > 400) {
-        sleep_counter = 0;
-        sleep_counter_freeze = true;
-        sleep = !sleep;
-
-        if (sleep) {
-            Serial.println("going into sleep....");
-            WiFi.disconnect();
-            WiFi.forceSleepBegin();
-            delay(10);
-        } else {
-            Serial.println("waking up from sleep....");
-            WiFi.forceSleepWake();
-            connect_wifi();
-        }
-    }
-
-    if (sleep) {
-        delay(7);
-        return;
-    }
     
     // read a packet from FIFO
     if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) { // Get the Latest packet 
@@ -246,6 +215,7 @@ void loop() {
 
     if(!client.connected()) {
         client.connect(host, HOST_PORT);
+        client.setNoDelay(true);
     }
 
     client.write(packet, 16);
