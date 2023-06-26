@@ -58,85 +58,16 @@ int switch_before = 0;
 int count = 0;
 int buzz_counter = 0;
 
+void init_mpu();
 void connect_wifi();
 
 void setup() {
-    // join I2C bus (I2Cdev library doesn't do this automatically)
-    #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
-        Wire.begin();
-        Wire.setClock(400000); // 400kHz I2C clock. Comment this line if having compilation difficulties
-    #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
-        Fastwire::setup(400, true);
-    #endif
+    init_mpu();
 
-    // initialize serial communication
-    // (115200 chosen because it is required for Teapot Demo output, but it's
-    // really up to you depending on your project)
-    Serial.begin(115200);
-    delay(1000);
-
-    // NOTE: 8MHz or slower host processors, like the Teensy @ 3.3V or Arduino
-    // Pro Mini running at 3.3V, cannot handle this baud rate reliably due to
-    // the baud timing being too misaligned with processor ticks. You must use
-    // 38400 or slower in these cases, or use some kind of external separate
-    // crystal solution for the UART timer.
-
-    // initialize device
-    Serial.println(F("Initializing I2C devices..."));
-    mpu.initialize();
-    pinMode(PIN_MPU_INT, INPUT);
-
-    // verify connection
-    Serial.println(F("Testing device connections..."));
-    Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
-    
-    // load and configure the DMP
-    Serial.println(F("Initializing DMP..."));
-    devStatus = mpu.dmpInitialize();
-
-    // supply your own gyro offsets here, scaled for min sensitivity
-    mpu.setXGyroOffset(220);
-    mpu.setYGyroOffset(76);
-    mpu.setZGyroOffset(-85);
-    mpu.setZAccelOffset(1788); // 1688 factory default for my test chip
-
-    // make sure it worked (returns 0 if so)
-    if (devStatus == 0) {
-        // Calibration Time: generate offsets and calibrate our MPU6050
-        mpu.CalibrateAccel(6);
-        mpu.CalibrateGyro(6);
-        mpu.PrintActiveOffsets();
-        // turn on the DMP, now that it's ready
-        Serial.println(F("Enabling DMP..."));
-        mpu.setDMPEnabled(true);
-
-        // enable Arduino interrupt detection
-        Serial.print(F("Enabling interrupt detection (Arduino external interrupt "));
-        Serial.print(digitalPinToInterrupt(PIN_MPU_INT));
-        Serial.println(F(")..."));
-        attachInterrupt(digitalPinToInterrupt(PIN_MPU_INT), dmpDataReady, RISING);
-        mpuIntStatus = mpu.getIntStatus();
-
-        // set our DMP Ready flag so the main loop() function knows it's okay to use it
-        Serial.println(F("DMP ready! Waiting for first interrupt..."));
-        dmpReady = true;
-
-        // get expected DMP packet size for later comparison
-        packetSize = mpu.dmpGetFIFOPacketSize();
-    } else {
-        // ERROR!
-        // 1 = initial memory load failed
-        // 2 = DMP configuration updates failed
-        // (if it's going to break, usually the code will be 1)
-        Serial.print(F("DMP Initialization failed (code "));
-        Serial.print(devStatus);
-        Serial.println(F(")"));
-    }
+    connect_wifi();
 
     pinMode(PIN_SWITCH, INPUT_PULLUP);
     pinMode(PIN_BUZZ, OUTPUT);
-
-    connect_wifi();
 }
 
 void loop() {
@@ -221,6 +152,80 @@ void loop() {
     client.write(packet, 16);
 
     delay(7);
+}
+
+void init_mpu() {
+    // join I2C bus (I2Cdev library doesn't do this automatically)
+    #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
+        Wire.begin();
+        Wire.setClock(400000); // 400kHz I2C clock. Comment this line if having compilation difficulties
+    #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
+        Fastwire::setup(400, true);
+    #endif
+
+    // initialize serial communication
+    // (115200 chosen because it is required for Teapot Demo output, but it's
+    // really up to you depending on your project)
+    Serial.begin(115200);
+    delay(1000);
+
+    // NOTE: 8MHz or slower host processors, like the Teensy @ 3.3V or Arduino
+    // Pro Mini running at 3.3V, cannot handle this baud rate reliably due to
+    // the baud timing being too misaligned with processor ticks. You must use
+    // 38400 or slower in these cases, or use some kind of external separate
+    // crystal solution for the UART timer.
+
+    // initialize device
+    Serial.println(F("Initializing I2C devices..."));
+    mpu.initialize();
+    pinMode(PIN_MPU_INT, INPUT);
+
+    // verify connection
+    Serial.println(F("Testing device connections..."));
+    Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
+    
+    // load and configure the DMP
+    Serial.println(F("Initializing DMP..."));
+    devStatus = mpu.dmpInitialize();
+
+    // supply your own gyro offsets here, scaled for min sensitivity
+    mpu.setXGyroOffset(220);
+    mpu.setYGyroOffset(76);
+    mpu.setZGyroOffset(-85);
+    mpu.setZAccelOffset(1788); // 1688 factory default for my test chip
+
+    // make sure it worked (returns 0 if so)
+    if (devStatus == 0) {
+        // Calibration Time: generate offsets and calibrate our MPU6050
+        mpu.CalibrateAccel(6);
+        mpu.CalibrateGyro(6);
+        mpu.PrintActiveOffsets();
+        // turn on the DMP, now that it's ready
+        Serial.println(F("Enabling DMP..."));
+        mpu.setDMPEnabled(true);
+
+        // enable Arduino interrupt detection
+        Serial.print(F("Enabling interrupt detection (Arduino external interrupt "));
+        Serial.print(digitalPinToInterrupt(PIN_MPU_INT));
+        Serial.println(F(")..."));
+        attachInterrupt(digitalPinToInterrupt(PIN_MPU_INT), dmpDataReady, RISING);
+        mpuIntStatus = mpu.getIntStatus();
+
+        // set our DMP Ready flag so the main loop() function knows it's okay to use it
+        Serial.println(F("DMP ready! Waiting for first interrupt..."));
+        dmpReady = true;
+
+        // get expected DMP packet size for later comparison
+        packetSize = mpu.dmpGetFIFOPacketSize();
+    } else {
+        // ERROR!
+        // 1 = initial memory load failed
+        // 2 = DMP configuration updates failed
+        // (if it's going to break, usually the code will be 1)
+        Serial.print(F("DMP Initialization failed (code "));
+        Serial.print(devStatus);
+        Serial.println(F(")"));
+    }
 }
 
 void connect_wifi() {
