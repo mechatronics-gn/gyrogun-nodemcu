@@ -11,13 +11,13 @@
     #include "Wire.h"
 #endif
 
-// MPU6050 SCL -> GPIO 5
-// MPU6050 SDA -> GPIO 4
-// MPU6050 INT -> GPIO 14
+// MPU6050 SCL -> GPIO 5 (D1)
+// MPU6050 SDA -> GPIO 4 (D2)
+// MPU6050 INT -> GPIO 14 (D5)
 #define PIN_MPU_INT 14
-// BUZZ -> GPIO 12
+// BUZZ -> GPIO 12 (D6)
 #define PIN_BUZZ 12
-// SWITCH -> GPIO 13
+// SWITCH -> GPIO 13 (D7)
 #define PIN_SWITCH 13
 
 /*
@@ -30,6 +30,7 @@
 
 MPU6050 mpu;
 WiFiClient client;
+WiFiUDP udp;
 IPAddress host HOST_IP;
 
 // MPU control/status vars
@@ -144,12 +145,18 @@ void loop() {
     packet[14] = roll_uint >> 8 % 256;
     packet[15] = roll_uint >> 0 % 256;
 
-    if(!client.connected()) {
-        client.connect(host, HOST_PORT);
-        client.setNoDelay(true);
-    }
+    if (message_type == 0) {
+      udp.beginPacket(host, HOST_PORT);
+      udp.write(packet+4, 12);
+      udp.endPacket();
+    } else {
+      if(!client.connected()) {
+          client.connect(host, HOST_PORT);
+          client.setNoDelay(true);
+      }
 
-    client.write(packet, 16);
+      client.write(packet, 16);
+    }
 
     delay(7);
 }
