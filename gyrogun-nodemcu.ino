@@ -5,6 +5,7 @@
  */
 
 #include "ESP8266WiFi.h"
+#include "WiFiUdp.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 
 #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
@@ -25,6 +26,7 @@
  * #define MECHANET_PW "password"
  * #define HOST_IP (127, 0, 0, 1)
  * #define HOST_PORT (11076)
+ * #define CLIENT_ID (0)
  */
 #include "secrets.h"
 
@@ -61,6 +63,7 @@ int buzz_counter = 0;
 
 void init_mpu();
 void connect_wifi();
+void advertise_id();
 
 void setup() {
     init_mpu();
@@ -145,16 +148,17 @@ void loop() {
     packet[14] = roll_uint >> 8 % 256;
     packet[15] = roll_uint >> 0 % 256;
 
+    if(!client.connected()) {
+        client.connect(host, HOST_PORT);
+        client.setNoDelay(true);
+        advertise_id();
+    }
+
     if (message_type == 0) {
       udp.beginPacket(host, HOST_PORT);
       udp.write(packet+4, 12);
       udp.endPacket();
     } else {
-      if(!client.connected()) {
-          client.connect(host, HOST_PORT);
-          client.setNoDelay(true);
-      }
-
       client.write(packet, 16);
     }
 
@@ -242,4 +246,31 @@ void connect_wifi() {
     while(WiFi.status() != WL_CONNECTED) {
         delay(500);
     }
+
+    if(!client.connected()) {
+        client.connect(host, HOST_PORT);
+        client.setNoDelay(true);
+    }
+
+    advertise_id();
+}
+
+void advertise_id() {
+    uint8_t packet[16] = {};
+
+    uint32_t message_type = 3;
+
+    packet[0] = message_type >> 24 % 256;
+    packet[1] = message_type >> 16 % 256;
+    packet[2] = message_type >> 8 % 256;
+    packet[3] = message_type >> 0 % 256;
+
+    uint32_t client_index = CLIENT_ID;
+
+    packet[4] = client_index >> 24 % 256;
+    packet[5] = client_index >> 16 % 256;
+    packet[6] = client_index >> 8 % 256;
+    packet[7] = client_index >> 0 % 256;
+
+    client.write(packet, 16);
 }
